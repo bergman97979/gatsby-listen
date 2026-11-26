@@ -1,0 +1,1 @@
+/* Optional media URLs are supplied by the hosting environment. */

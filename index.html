@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-title" content="盖茨比听书">
+  <link rel="manifest" href="./app.webmanifest">
+  <link rel="apple-touch-icon" href="./app-192.png">
+  <meta name="theme-color" content="#133b33">
+  <meta name="description" content="《了不起的盖茨比》英文朗读，全九章，可按章收听。">
+  <title>了不起的盖茨比 · 英文有声书</title>
+  <link rel="stylesheet" href="./listen.css">
+  <script src="./config.js" defer></script>
+  <script src="./listen.js" defer></script>
+  <script src="./offline.js" defer></script>
+</head>
+<body>
+<main>
+  <nav class="view-nav" aria-label="听书导航">
+    <p class="edition"><i aria-hidden="true"></i> 英文有声书</p>
+    <button type="button" id="open-library" aria-controls="chapters">章节与下载</button>
+    <button type="button" id="back-to-player" aria-controls="player" hidden>返回听书</button>
+  </nav>
+  <header class="masthead">
+    <div class="heading">
+      <h1>了不起的盖茨比</h1>
+      <p class="byline"><span lang="en">F. Scott Fitzgerald</span><span class="dot">·</span>菲茨杰拉德</p>
+    </div>
+  </header>
+  <div class="spread">
+    <section class="player" id="player" aria-label="有声书播放器">
+      <div class="visual" id="visual">
+        <div class="cover" id="cover" aria-hidden="true">
+          <div class="gate left"></div><div class="gate right"></div>
+          <div class="cover-title" lang="en"><span>THE GREAT</span><b>GATSBY</b></div>
+          <div class="skyline"></div><div class="water"></div><div class="beacon"></div>
+        </div>
+      </div>
+      <div class="transport">
+        <div class="playline">
+          <a id="play" class="playbutton" aria-label="播放第一章" href="media/01.m4a">
+            <span class="play-icon" aria-hidden="true"></span>
+          </a>
+          <div>
+            <p class="kicker" id="player-state">所选章节</p>
+            <h2 id="current">第一章 <em lang="en">Chapter One</em></h2>
+          </div>
+          <button class="subtitle-toggle" id="subtitle-toggle" type="button" role="switch" aria-checked="false" aria-controls="subtitle-panel">
+            <span>中英字幕</span><span class="switch-track" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div id="audio-slot"><audio id="audio" controls controlslist="nodownload" preload="none" aria-label="章节播放与进度"></audio></div>
+        <p id="notice" role="status" hidden></p>
+        <section id="subtitle-panel" aria-label="当前中英字幕" hidden>
+          <div class="subtitle-modes" role="radiogroup" aria-label="字幕显示方式">
+            <input type="radio" name="subtitle-mode" id="subtitle-mode-single" value="single" checked>
+            <label for="subtitle-mode-single">单句</label>
+            <input type="radio" name="subtitle-mode" id="subtitle-mode-passage" value="passage">
+            <label for="subtitle-mode-passage">整段</label>
+          </div>
+          <p id="subtitle-status" role="status"></p>
+          <div id="subtitle-single">
+            <p id="subtitle-en" lang="en"></p>
+            <p id="subtitle-zh" lang="zh-CN"></p>
+          </div>
+          <div id="subtitle-passage" role="region" aria-label="本段中英对照" tabindex="0" hidden></div>
+        </section>
+      </div>
+    </section>
+    <section class="contents" id="chapters" aria-labelledby="contents-title" hidden>
+      <div class="contents-heading"><h2 id="contents-title">章节与下载</h2><span>9 章 · 共 4 小时 51 分</span></div>
+      <div class="offline-save" id="offline-save" data-state="checking">
+        <button type="button" id="offline-download" disabled>下载九章离线听书版</button>
+        <p id="offline-help" hidden></p>
+        <p id="offline-status" role="status"></p>
+        <div id="wechat-handoff" hidden>
+          <p id="wechat-browser-step"></p>
+          <p>浏览器打开后，点「章节与下载」→「下载九章离线听书版」。</p>
+          <button type="button" id="wechat-copy">复制听书链接</button>
+          <label id="wechat-address-box" hidden>听书链接
+            <input id="wechat-address" type="url" readonly>
+          </label>
+          <p id="wechat-copy-status" role="status"></p>
+        </div>
+      </div>
+      <div class="selected-info">
+        <strong id="library-current">当前章节 · 第一章</strong>
+        <span id="range">本章时长 35:18 · 全书起点 0:00:00</span>
+      </div>
+      <ol class="chapters">
+        <li><a class="track" href="media/01.m4a" data-start="0" aria-current="true" aria-label="播放第一章，时长35分18秒"><span class="number" aria-hidden="true">01</span><span class="chapter-text"><strong>第一章</strong><em lang="en">Chapter One</em></span><time datetime="PT2118S" title="本章时长 35分18秒">35:18</time></a></li>
+        <li><a class="track" href="media/02.m4a" data-start="2118" aria-label="播放第二章，时长25分8秒"><span class="number" aria-hidden="true">02</span><span class="chapter-text"><strong>第二章</strong><em lang="en">Chapter Two</em></span><time datetime="PT1508S" title="本章时长 25分8秒">25:08</time></a></li>
+        <li><a class="track" href="media/03.m4a" data-start="3626" aria-label="播放第三章，时长34分24秒"><span class="number" aria-hidden="true">03</span><span class="chapter-text"><strong>第三章</strong><em lang="en">Chapter Three</em></span><time datetime="PT2064S" title="本章时长 34分24秒">34:24</time></a></li>
+        <li><a class="track" href="media/04.m4a" data-start="5690" aria-label="播放第四章，时长33分钟"><span class="number" aria-hidden="true">04</span><span class="chapter-text"><strong>第四章</strong><em lang="en">Chapter Four</em></span><time datetime="PT1980S" title="本章时长 33分钟">33:00</time></a></li>
+        <li><a class="track" href="media/05.m4a" data-start="7670" aria-label="播放第五章，时长25分56秒"><span class="number" aria-hidden="true">05</span><span class="chapter-text"><strong>第五章</strong><em lang="en">Chapter Five</em></span><time datetime="PT1556S" title="本章时长 25分56秒">25:56</time></a></li>
+        <li><a class="track" href="media/06.m4a" data-start="9226" aria-label="播放第六章，时长24分40秒"><span class="number" aria-hidden="true">06</span><span class="chapter-text"><strong>第六章</strong><em lang="en">Chapter Six</em></span><time datetime="PT1480S" title="本章时长 24分40秒">24:40</time></a></li>
+        <li><a class="track" href="media/07.m4a" data-start="10706" aria-label="播放第七章，时长53分53秒"><span class="number" aria-hidden="true">07</span><span class="chapter-text"><strong>第七章</strong><em lang="en">Chapter Seven</em></span><time datetime="PT3233S" title="本章时长 53分53秒">53:53</time></a></li>
+        <li><a class="track" href="media/08.m4a" data-start="13939" aria-label="播放第八章，时长27分41秒"><span class="number" aria-hidden="true">08</span><span class="chapter-text"><strong>第八章</strong><em lang="en">Chapter Eight</em></span><time datetime="PT1661S" title="本章时长 27分41秒">27:41</time></a></li>
+        <li><a class="track" href="media/09.m4a" data-start="15600" aria-label="播放第九章，时长31分15秒"><span class="number" aria-hidden="true">09</span><span class="chapter-text"><strong>第九章</strong><em lang="en">Chapter Nine</em></span><time datetime="PT1875S" title="本章时长 31分15秒">31:15</time></a></li>
+      </ol>
+    </section>
+  </div>
+</main>
+</body>
+</html>
