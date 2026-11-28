@@ -41,6 +41,9 @@
   const subtitleEnglish = byId("subtitle-en"), subtitleChinese = byId("subtitle-zh");
   const singleChoice = byId("subtitle-mode-single"), passageChoice = byId("subtitle-mode-passage");
   const passageText = byId("subtitle-passage");
+  const glossToggle = byId("gloss-toggle"), wordNote = byId("word-note");
+  const glossKey = "gatsby.subtitle-glosses.v1";
+  let selectedWord = null, selectedTranslation = null;
   const subtitleKey = "gatsby.bilingual-subtitles.v1";
   const modeKey = "gatsby.subtitle-mode.v1";
   const subtitleLoads = new Map();
@@ -50,7 +53,123 @@
   try {
     subtitlesEnabled = localStorage.getItem(subtitleKey) === "on";
     if (localStorage.getItem(modeKey) === "passage") passageChoice.checked = true;
+    if (glossToggle) glossToggle.checked = localStorage.getItem(glossKey) !== "off";
   } catch (_) {}
+  if (glossToggle) byId("gloss-hint").hidden = !glossToggle.checked;
+
+  function closeWordNote(restoreFocus = false, followAudio = true) {
+    if (!selectedWord) return;
+    const trigger = selectedWord;
+    trigger.setAttribute("aria-expanded", "false");
+    selectedTranslation?.classList.remove("gloss-match");
+    wordNote.hidden = true;
+    selectedWord = selectedTranslation = null;
+    if (followAudio) syncSubtitles();
+    if (restoreFocus) (trigger.isConnected ? trigger : glossToggle).focus({preventScroll:true});
+  }
+
+  function positionWordNote() {
+    if (!wordNote || wordNote.hidden) return;
+    const gap = 8, height = document.documentElement.clientHeight, width = document.documentElement.clientWidth;
+    const box = wordNote.getBoundingClientRect();
+    const anchor = selectedWord?.isConnected ? selectedWord.getBoundingClientRect() : null;
+    // Keep the two subtitle lines visible together when there is room for the note.
+    const pair = selectedWord?.isConnected ? selectedWord.closest(".subtitle-pair, #subtitle-single").getBoundingClientRect() : null;
+    let x = box.left, y = box.top;
+    if (anchor && anchor.bottom > 0 && anchor.top < height) {
+      x = anchor.left;
+      if (pair.bottom + gap + box.height <= height - gap) y = pair.bottom + gap;
+      else if (pair.top - gap - box.height >= gap) y = pair.top - gap - box.height;
+      else y = anchor.top > height / 2 ? anchor.top - gap - box.height : anchor.bottom + gap;
+    }
+    wordNote.style.left = Math.max(gap, Math.min(x, width - box.width - gap)) + "px";
+    wordNote.style.top = Math.max(gap, Math.min(y, height - box.height - gap)) + "px";
+  }
+
+  function openWordNote(button, translation, entry, keyboard) {
+    if (selectedWord === button) { closeWordNote(); return; }
+    closeWordNote(false, false);
+    selectedWord = button;
+    selectedTranslation = translation;
+    button.setAttribute("aria-expanded", "true");
+    translation?.classList.add("gloss-match");
+    byId("note-term").textContent = entry[0];
+    byId("note-zh").textContent = entry[1];
+    byId("note-en").textContent = entry[2];
+    wordNote.hidden = false;
+    positionWordNote();
+    if (keyboard) byId("note-close").focus({preventScroll:true});
+  }
+
+  byId("note-close")?.addEventListener("click", () => closeWordNote(true));
+  byId("note-close")?.addEventListener("keydown", event => {
+    // Let the native Tab continue from the word in reading order.
+    if (event.key === "Tab") closeWordNote(true);
+  });
+  document.addEventListener("click", event => {
+    if (selectedWord && !wordNote.contains(event.target) && !event.target.closest(".gloss-word")) closeWordNote();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && selectedWord) {
+      event.preventDefault();
+      closeWordNote(true);
+    }
+  });
+  window.addEventListener("resize", positionWordNote);
+  document.addEventListener("scroll", positionWordNote, {capture:true, passive:true});
+
+  // Render each timed fragment separately. A repeated word in another line can have a different sense.
+  function renderSubtitlePair(english, chinese, fragments) {
+    const en = document.createDocumentFragment(), zh = document.createDocumentFragment();
+    for (const [index, cue] of fragments.entries()) {
+      if (index) en.append(" ");
+      const entries = glossToggle?.checked && Array.isArray(cue[6]) ? cue[6] : [];
+      const translations = new Map();
+      function appendLine(target, original, chineseLine) {
+        const matches = [];
+        for (const entry of entries) {
+          if (!Array.isArray(entry) || !entry[0] || !entry[1] || !entry[2]) continue;
+          const term = chineseLine ? entry[3] : entry[0];
+          if (!term) continue;
+          const start = original.indexOf(term);
+          if (start >= 0) matches.push({start, term, entry});
+        }
+        matches.sort((a, b) => a.start - b.start);
+        let cursor = 0;
+        for (const {start, term, entry} of matches) {
+          if (start < cursor) continue;
+          target.append(original.slice(cursor, start));
+          const mark = document.createElement(chineseLine ? "span" : "button");
+          mark.textContent = term;
+          if (chineseLine) translations.set(entry, mark);
+          else {
+            mark.type = "button";
+            mark.className = "gloss-word";
+            mark.setAttribute("aria-expanded", "false");
+            mark.setAttribute("aria-haspopup", "dialog");
+            mark.setAttribute("aria-controls", "word-note");
+            mark.addEventListener("click", event => openWordNote(mark, translations.get(entry), entry, event.detail === 0));
+          }
+          target.append(mark);
+          cursor = start + term.length;
+        }
+        target.append(original.slice(cursor));
+      }
+      appendLine(zh, cue[3], true);
+      appendLine(en, cue[2], false);
+    }
+    english.replaceChildren(en);
+    chinese.replaceChildren(zh);
+  }
+
+  glossToggle?.addEventListener("change", () => {
+    closeWordNote();
+    byId("gloss-hint").hidden = !glossToggle.checked;
+    try { localStorage.setItem(glossKey, glossToggle.checked ? "on" : "off"); } catch (_) {}
+    visibleCue = undefined;
+    visiblePassage = null;
+    syncSubtitles();
+  });
 
   function indexPassages(cues) {
     const hasGroups = cues.every(cue => Number.isInteger(cue[4]) && cue[4] > 0);
@@ -63,17 +182,16 @@
           !/[.!?…][”’"')\]]*$/.test(previous[2]));
       if (continues) {
         const pair = pairs[pairs.length - 1];
-        pair.english += " " + cue[2];
-        pair.chinese += cue[3];
+        pair.fragments.push(cue);
       } else {
-        pairs.push({first:index, group:cue[4], english:cue[2], chinese:cue[3]});
+        pairs.push({first:index, group:cue[4], fragments:[cue]});
       }
     });
     const positions = [];
     let group, lastGroup;
     // Older chapter files have no group IDs. Keep five sentence pairs together
     // and fold a short final group into the preceding one.
-    const firstIsTitle = pairs.length && /^Chapter \w+$/i.test(pairs[0].english) ? 1 : 0;
+    const firstIsTitle = pairs.length && /^Chapter \w+$/i.test(pairs[0].fragments[0][2]) ? 1 : 0;
     const fallbackGroups = Math.max(1, Math.floor((pairs.length - firstIsTitle) / 5));
     pairs.forEach((pair, index) => {
       const fallback = Math.max(0, Math.floor((index - firstIsTitle) / 5));
@@ -120,8 +238,7 @@
         const english = document.createElement("p"), chinese = document.createElement("p");
         english.lang = "en";
         chinese.lang = "zh-CN";
-        english.textContent = pair.english;
-        chinese.textContent = pair.chinese;
+        renderSubtitlePair(english, chinese, pair.fragments);
         row.append(english, chinese);
         content.append(row);
       }
@@ -157,7 +274,7 @@
     subtitleStatus.textContent = status;
   }
   function syncSubtitles() {
-    if (!subtitlesEnabled || !activeCues || !activeCues.length) return;
+    if (selectedWord || !subtitlesEnabled || !activeCues || !activeCues.length) return;
     const seconds = audio.currentTime;
     let lo = 0, hi = activeCues.length;
     while (lo < hi) {
@@ -175,8 +292,7 @@
     }
     if (cue === visibleCue) return;
     visibleCue = cue;
-    subtitleEnglish.textContent = cue ? cue[2] : "";
-    subtitleChinese.textContent = cue ? cue[3] : "";
+    renderSubtitlePair(subtitleEnglish, subtitleChinese, cue ? [cue] : []);
   }
   async function readCues(chapter) {
     let cues = window.GATSBY_SUBTITLES?.[chapter];
@@ -195,6 +311,7 @@
     return cues;
   }
   async function loadSubtitles() {
+    closeWordNote();
     activeCues = null;
     displayMode();
     subtitleToggle.setAttribute("aria-checked", String(subtitlesEnabled));
@@ -227,6 +344,7 @@
   for (const choice of [singleChoice, passageChoice]) {
     choice.addEventListener("change", () => {
       if (!choice.checked) return;
+      closeWordNote();
       try { localStorage.setItem(modeKey, choice.value); } catch (_) {}
       displayMode();
       syncSubtitles();
@@ -251,6 +369,7 @@
   function showLibrary(open, focus = true) {
     if (open === !chapterView.hidden) return;
     if (open) {
+      closeWordNote();
       readingOffset = window.scrollY;
       readingPassage = visiblePassage;
       readingPair = highlightedPair;

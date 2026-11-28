@@ -111,7 +111,23 @@ audio {display:block;width:100%;height:44px;margin-top:1rem}
 #subtitle-zh,.subtitle-pair [lang=zh-CN] {color:#364d40;font-size:clamp(1rem,1.4vw,1.1rem);line-height:1.6}
 #subtitle-en:not(:empty) + #subtitle-zh {margin-top:.42rem}
 #subtitle-status {color:#4d6256;font-size:.94rem;line-height:1.5}
-.subtitle-modes {position:relative;display:inline-flex;align-items:stretch;margin:0 0 .75rem;padding:2px;border:1px solid #a6b6a9;border-radius:.45rem;background:#f8faf6}
+.subtitle-tools {display:flex;align-items:center;flex-wrap:wrap;gap:.15rem 1rem;margin-bottom:.7rem}
+.subtitle-modes {position:relative;display:inline-flex;align-items:stretch;padding:2px;border:1px solid #a6b6a9;border-radius:.45rem;background:#f8faf6}
+.gloss-controls {display:flex;align-items:center;flex-wrap:wrap;gap:0 .6rem}
+.gloss-controls label {display:inline-flex;align-items:center;gap:.32rem;min-height:44px;font-size:.9rem;color:var(--ink);cursor:pointer}
+#gloss-toggle {width:1rem;height:1rem;margin:0;accent-color:#24523e}
+#gloss-hint {font-size:.8rem;color:#526558}
+.gloss-word {display:inline;max-width:100%;appearance:none;margin:0;border:0;padding:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;vertical-align:baseline;cursor:pointer;text-align:inherit;text-decoration:underline dotted #37644a;text-underline-offset:.18em}
+.gloss-word[aria-expanded=true],.gloss-match {background:#f5dc9d;color:#34291a;border-radius:.16rem;box-shadow:0 0 0 1px #a98232}
+#word-note {position:fixed;left:8px;top:8px;z-index:8;width:min(21rem,calc(100% - 16px));max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:.65rem .95rem .85rem;background:#fffdf6;color:#193c31;border:1px solid #8c9e8e;border-radius:.6rem;box-shadow:0 4px 18px #193c3133}
+.note-heading {display:flex;align-items:center;justify-content:space-between;gap:.7rem;border-bottom:1px solid #d9dfd4}
+#note-term {font:600 1.32rem/1.25 var(--english);min-width:0}
+#note-close {min-height:44px;min-width:44px;flex:none;padding:.2rem;border:0;background:transparent;color:#3e5c4a;font:inherit;font-size:.86rem;cursor:pointer}
+#word-note dl {display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.38rem .7rem;align-items:baseline;margin:.6rem 0 0;line-height:1.45}
+#word-note dt {font-size:.77rem;color:#526558}
+#word-note dd {margin:0}
+#note-en {font:1.03rem/1.4 var(--english)}
+#word-note .note-follow {margin:.6rem 0 0;color:#526558;font-size:.78rem}
 .subtitle-modes input {position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}
 .subtitle-modes label {display:grid;place-items:center;min-height:44px;min-width:3.6rem;padding:.3rem .8rem;cursor:pointer;border-radius:.31rem;color:#365942;font-size:.94rem}
 .subtitle-modes input:checked + label {background:#24523e;color:white}

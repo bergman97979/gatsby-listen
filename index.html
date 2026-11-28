@@ -52,11 +52,17 @@
         <div id="audio-slot"><audio id="audio" controls controlslist="nodownload" preload="none" aria-label="章节播放与进度"></audio></div>
         <p id="notice" role="status" hidden></p>
         <section id="subtitle-panel" aria-label="当前中英字幕" hidden>
-          <div class="subtitle-modes" role="radiogroup" aria-label="字幕显示方式">
-            <input type="radio" name="subtitle-mode" id="subtitle-mode-single" value="single" checked>
-            <label for="subtitle-mode-single">单句</label>
-            <input type="radio" name="subtitle-mode" id="subtitle-mode-passage" value="passage">
-            <label for="subtitle-mode-passage">整段</label>
+          <div class="subtitle-tools">
+            <div class="subtitle-modes" role="radiogroup" aria-label="字幕显示方式">
+              <input type="radio" name="subtitle-mode" id="subtitle-mode-single" value="single" checked>
+              <label for="subtitle-mode-single">单句</label>
+              <input type="radio" name="subtitle-mode" id="subtitle-mode-passage" value="passage">
+              <label for="subtitle-mode-passage">整段</label>
+            </div>
+            <div class="gloss-controls">
+              <label><input type="checkbox" id="gloss-toggle" checked> 难词标注</label>
+              <span id="gloss-hint">点虚线词看释义</span>
+            </div>
           </div>
           <p id="subtitle-status" role="status"></p>
           <div id="subtitle-single">
@@ -64,6 +70,17 @@
             <p id="subtitle-zh" lang="zh-CN"></p>
           </div>
           <div id="subtitle-passage" role="region" aria-label="本段中英对照" tabindex="0" hidden></div>
+          <aside id="word-note" role="dialog" aria-labelledby="note-term" aria-describedby="note-zh note-en" hidden>
+            <div class="note-heading">
+              <strong id="note-term" lang="en"></strong>
+              <button type="button" id="note-close" aria-label="关闭难词释义">关闭</button>
+            </div>
+            <dl>
+              <dt>本句词义</dt><dd id="note-zh"></dd>
+              <dt>英文释义</dt><dd id="note-en" lang="en"></dd>
+            </dl>
+            <p class="note-follow">关闭后，字幕会跟上朗读。</p>
+          </aside>
         </section>
       </div>
     </section>
