@@ -117,14 +117,25 @@
   window.addEventListener("resize", positionWordNote);
   document.addEventListener("scroll", positionWordNote, {capture:true, passive:true});
 
-  const glossTones = ["jade", "umber", "indigo", "plum", "slate", "olive"];
+  const glossTones = ["jade", "umber", "indigo", "plum", "slate", "olive", "brick", "graphite"];
+
+  // A speaker may repeat the same word in a single timed cue. Either language
+  // can specify its one-based occurrence; older annotations mean the first.
+  function termStart(original, term, occurrence = 1) {
+    if (!term || !Number.isInteger(occurrence) || occurrence < 1) return -1;
+    let start = original.indexOf(term);
+    for (let n = 1; n < occurrence && start >= 0; n++) {
+      start = original.indexOf(term, start + term.length);
+    }
+    return start;
+  }
 
   function appendMarkedLine(target, original, glosses, termField) {
     const matches = [];
     for (const gloss of glosses) {
       const term = gloss.entry[termField];
       if (!term) continue;
-      const start = original.indexOf(term);
+      const start = termField === 0 ? gloss.enStart : gloss.zhStart;
       if (start >= 0) matches.push({gloss, start, term});
     }
     // Place each mark in its own language's word order while keeping the pair's style.
@@ -156,9 +167,12 @@
       if (index) en.append(" ");
       // Match within the original timed cue, even when joining fragments in passage mode.
       const entries = glossToggle?.checked && Array.isArray(cue[6]) ? cue[6] : [];
-      const glosses = entries.filter(entry => Array.isArray(entry) && entry[0] && entry[1] && entry[2] && cue[2].includes(entry[0]))
-        .sort((a, b) => cue[2].indexOf(a[0]) - cue[2].indexOf(b[0]))
-        .map(entry => ({entry, tone:glossTones[toneIndex++ % glossTones.length], marks:[]}));
+      const glosses = entries.filter(entry => Array.isArray(entry) && entry[0] && entry[1] && entry[2])
+        .map(entry => ({entry, enStart:termStart(cue[2], entry[0], entry[4]?.en),
+          zhStart:termStart(cue[3], entry[3], entry[4]?.zh), marks:[]}))
+        .filter(gloss => gloss.enStart >= 0)
+        .sort((a, b) => a.enStart - b.enStart);
+      for (const gloss of glosses) gloss.tone = glossTones[toneIndex++ % glossTones.length];
       appendMarkedLine(en, cue[2], glosses, 0);
       appendMarkedLine(zh, cue[3], glosses, 3);
     }
