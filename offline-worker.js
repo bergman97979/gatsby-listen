@@ -1,5 +1,5 @@
 // Bump this revision when the player or its captions change. Audio is keyed by digest.
-const revision = "2026-11-28-5";
+const revision = "2026-11-28-6";
 const scope = self.registration.scope;
 const prefix = "gatsby-listen:" + scope + ":";
 const audioCacheName = prefix + "audio";
@@ -23,7 +23,7 @@ const chapters = mediaHashes.map((hash, i) => {
   return {media:"media/" + number + ".m4a", captions:"subtitles/" + number + ".json", key:absolute(".offline/audio/" + hash), hash};
 });
 const assets = ["index.html", "listen.js", "listen.css", "offline.js", "config.js",
-  "app.webmanifest", "app-192.png", "app-512.png", ...chapters.map(chapter => chapter.captions)];
+  "app.webmanifest", "app-192.png", "app-512.png", "subtitles/paragraphs.json", ...chapters.map(chapter => chapter.captions)];
 const total = chapters.length;
 const ports = new Set();
 let saving = null;
@@ -95,6 +95,12 @@ async function storeAsset(cache, path) {
     const text = new TextDecoder().decode(bytes);
     if (path === "index.html") {
       if (!text.includes('id="player"') || !text.includes("offline.js")) throw new Error("Invalid player");
+    } else if (path === "subtitles/paragraphs.json") {
+      const pages = JSON.parse(text);
+      if (!Array.isArray(pages) || pages.length !== total || !pages.every(chapter =>
+        chapter && typeof chapter === "object" && !Array.isArray(chapter) &&
+        Object.entries(chapter).every(([id, kind]) => /^[1-9]\d*$/.test(id) && typeof kind === "string")
+      )) throw new Error("Invalid paragraph layout");
     } else if (path.endsWith(".json")) {
       const cues = JSON.parse(text);
       if (!Array.isArray(cues) || !cues.length || !cues.every(cue =>

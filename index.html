@@ -17,7 +17,7 @@
 <body>
 <main>
   <nav class="view-nav" aria-label="听书导航">
-    <p class="edition"><i aria-hidden="true"></i> 英文有声书</p>
+    <p class="edition"><i aria-hidden="true"></i><span class="edition-label">英文有声书</span><span class="compact-book-title">了不起的盖茨比</span></p>
     <button type="button" id="open-library" aria-controls="chapters">章节与下载</button>
     <button type="button" id="back-to-player" aria-controls="player" hidden>返回听书</button>
   </nav>
@@ -72,7 +72,7 @@
             <p id="subtitle-en" lang="en"></p>
             <p id="subtitle-zh" lang="zh-CN"></p>
           </div>
-          <div id="subtitle-passage" role="region" aria-label="本段中英对照" tabindex="0" hidden></div>
+          <div id="subtitle-passage" role="region" aria-label="本章连续中英对照" tabindex="0" hidden></div>
           <aside id="word-note" role="dialog" aria-labelledby="note-term" aria-describedby="note-zh note-en" hidden>
             <div class="note-heading">
               <strong id="note-term" lang="en"></strong>

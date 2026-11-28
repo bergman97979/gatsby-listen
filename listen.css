@@ -22,6 +22,7 @@ main {
 .view-nav {position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.45rem 0;padding-top:calc(.45rem + env(safe-area-inset-top,0px));background:#f7f7f2}
 .view-nav button {border:1px solid #a3b3a5;border-radius:1.5rem;background:#fffefa;color:var(--ink);font:inherit;font-size:.93rem;font-weight:500;min-height:44px;padding:.45rem 1rem;cursor:pointer}
 .view-nav button:hover {background:#e6ede4}
+.compact-book-title {display:none}
 
 .masthead {margin-top:clamp(.6rem,2.5vw,1.8rem);display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:clamp(1.3rem,2.8vw,2rem);border-bottom:1px solid var(--ink);margin-bottom:clamp(1.25rem,3.4vw,2.55rem)}
 .edition {margin:0;display:flex;align-items:center;gap:.55rem;font-weight:600;font-size:.87rem;letter-spacing:.12em;color:#456654}
@@ -144,11 +145,13 @@ audio {display:block;width:100%;height:44px;margin-top:1rem}
 .subtitle-modes label {display:grid;place-items:center;min-height:44px;min-width:3.6rem;padding:.3rem .8rem;cursor:pointer;border-radius:.31rem;color:#365942;font-size:.94rem}
 .subtitle-modes input:checked + label {background:#24523e;color:white}
 .subtitle-modes input:focus-visible + label {outline:3px solid #9e733c;outline-offset:2px}
-.subtitle-pair {border-left:3px solid transparent;padding:.43rem .65rem}
-.subtitle-pair + .subtitle-pair {margin-top:.22rem}
+.subtitle-pair {border-left:3px solid transparent;padding:.36rem .65rem}
+.subtitle-pair + .subtitle-pair {margin-top:.1rem}
+.subtitle-pair + [data-break=paragraph] {margin-top:1.05rem}
+.subtitle-pair + [data-break=dialogue] {margin-top:.75rem}
 #subtitle-passage .subtitle-pair [lang=zh-CN] {margin-top:.14rem}
 .subtitle-pair[aria-current=true] {border-color:#386749;background:#dfeadf}
-#subtitle-passage {max-height:74vh;max-height:74svh;overflow-y:auto;overflow-anchor:none;scrollbar-gutter:stable}
+#subtitle-passage {--reading-limit:74vh;--reading-limit:74svh;max-height:74vh;max-height:min(var(--reading-limit),var(--reading-room,100vh));overflow-y:auto;overflow-anchor:none;scrollbar-gutter:stable}
 #subtitle-passage:focus-visible {outline:2px solid #9e733c;outline-offset:2px}
 .player.passage-reading .visual {display:none}
 @media(max-width:400px){
@@ -161,6 +164,29 @@ audio {display:block;width:100%;height:44px;margin-top:1rem}
 @media(max-width:600px){
   .playline h2 em {display:block;margin-left:0}
   .listening-actions {gap:.45rem}
+  main:has(.passage-reading:not([hidden])) .masthead {margin:.25rem 0 .65rem;padding-bottom:.55rem}
+  main:has(.passage-reading:not([hidden])) h1 {font-size:1.5rem}
+  main:has(.passage-reading:not([hidden])) .byline {margin-top:.25rem}
+  .passage-reading .transport {padding-top:.5rem}
+  .passage-reading audio {margin-top:.45rem}
+  .passage-reading #subtitle-panel {margin-top:.45rem}
+  .passage-reading .subtitle-tools {gap:.1rem .65rem;margin-bottom:.5rem}
+  .passage-reading .gloss-controls {display:contents}
+  .passage-reading #gloss-hint {flex-basis:100%}
+}
+@media(max-width:600px) and (max-height:720px) and (orientation:portrait){
+  main:has(.passage-reading:not([hidden])) .masthead,
+  main:has(.passage-reading:not([hidden])) .edition-label {display:none}
+  main:has(.passage-reading:not([hidden])) .compact-book-title {display:inline}
+  .passage-reading .playline {display:grid;grid-template-columns:44px auto 1fr;gap:.15rem .65rem}
+  .passage-reading .playline > div:not(.listening-actions) {grid-area:1 / 1 / 2 / -1;display:flex;align-items:baseline;gap:.5rem}
+  .passage-reading .playline .kicker {order:1;margin:0}
+  .passage-reading .playbutton {grid-row:2;width:44px;height:44px}
+  .passage-reading .listening-actions {display:contents}
+  .passage-reading .replay-sentence {grid-row:2}
+  .passage-reading .subtitle-toggle {grid-row:2;justify-self:end}
+  .passage-reading .playline h2 em {display:none}
+  .passage-reading .replay-sentence {padding-inline:.4rem}
 }
 
 /* Keep the controls alongside the text when both columns have room. */
@@ -188,7 +214,7 @@ audio {display:block;width:100%;height:44px;margin-top:1rem}
     margin:0;border-radius:0;padding:1.15rem clamp(1rem,2vw,1.75rem);
   }
   .player.subtitles-on #subtitle-passage {
-    max-height:clamp(14rem,calc(100svh - 22rem),50rem);
+    --reading-limit:clamp(14rem,calc(100svh - 22rem),50rem);
   }
 }
 
@@ -208,7 +234,7 @@ audio {display:block;width:100%;height:44px;margin-top:1rem}
   .player.subtitles-on .subtitle-toggle {display:grid;place-items:center;align-content:center;gap:2px}
   .player.subtitles-on audio {margin-top:.45rem}
   .player.subtitles-on #subtitle-panel {padding:.65rem .85rem}
-  .player.subtitles-on #subtitle-passage {max-height:70vh;max-height:70svh}
+  .player.subtitles-on #subtitle-passage {--reading-limit:70svh}
   .transport {padding-top:.6rem}
   #subtitle-panel {margin-top:.55rem}
 }

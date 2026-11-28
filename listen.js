@@ -49,7 +49,11 @@
   const modeKey = "gatsby.subtitle-mode.v1";
   const subtitleLoads = new Map();
   let subtitlesEnabled = false, activeCues = null, visibleSentence = null;
-  let passagePositions = [], visiblePassage = null, highlightedPair = null;
+  let sentences = [], sentenceByCue = [], renderedChapter = null;
+  let highlightedPair = null, currentSentence = null, nextReadingStep = Infinity;
+  let paragraphBreaks = window.GATSBY_PARAGRAPHS, layoutRequest = null;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const viewNav = document.querySelector(".view-nav");
   let manuallyReading = false;
   try {
     subtitlesEnabled = localStorage.getItem(subtitleKey) === "on";
@@ -189,53 +193,89 @@
     byId("gloss-hint").hidden = !glossToggle.checked;
     try { localStorage.setItem(glossKey, glossToggle.checked ? "on" : "off"); } catch (_) {}
     visibleSentence = null;
-    visiblePassage = null;
+    renderedChapter = null;
     syncSubtitles();
   });
 
-  function indexPassages(cues) {
-    const hasGroups = cues.every(cue => Number.isInteger(cue[4]) && cue[4] > 0);
+  function indexSentences(cues) {
     const hasPairs = cues.every(cue => Number.isInteger(cue[5]) && cue[5] > 0);
-    const pairs = [];
-    cues.forEach((cue, index) => {
+    sentences = [];
+    sentenceByCue = cues.map((cue, index) => {
       const previous = cues[index - 1];
-      const continues = previous && (!hasGroups || cue[4] === previous[4]) &&
-        (hasPairs ? cue[5] === previous[5] : !/^Chapter \w+$/i.test(previous[2]) &&
-          !/[.!?…][”’"')\]]*$/.test(previous[2]));
-      if (continues) {
-        const pair = pairs[pairs.length - 1];
-        pair.fragments.push(cue);
-      } else {
-        pairs.push({first:index, group:cue[4], fragments:[cue]});
+      const continues = previous && cue[4] === previous[4] && (hasPairs
+        ? cue[5] === previous[5]
+        : !/^Chapter \w+$/i.test(previous[2]) && !/[.!?…][”’"')\]]*$/.test(previous[2]));
+      if (!continues) {
+        sentences.push({index:sentences.length, id:cue[5], group:cue[4] ?? Math.floor(sentences.length / 5), fragments:[]});
       }
+      const sentence = sentences[sentences.length - 1];
+      sentence.fragments.push(cue);
+      return sentence;
     });
-    const positions = [];
-    let group, lastGroup;
-    // Older chapter files have no group IDs. Keep five sentence pairs together
-    // and fold a short final group into the preceding one.
-    const firstIsTitle = pairs.length && /^Chapter \w+$/i.test(pairs[0].fragments[0][2]) ? 1 : 0;
-    const fallbackGroups = Math.max(1, Math.floor((pairs.length - firstIsTitle) / 5));
-    pairs.forEach((pair, index) => {
-      const fallback = Math.max(0, Math.floor((index - firstIsTitle) / 5));
-      const groupId = hasGroups ? pair.group : Math.min(fallbackGroups - 1, fallback);
-      if (!group || groupId !== lastGroup) {
-        group = [];
-        lastGroup = groupId;
-      }
-      const position = {group, line:group.length, sentence:pair};
-      group.push(pair);
-      const end = index + 1 < pairs.length ? pairs[index + 1].first : cues.length;
-      for (let i = pair.first; i < end; i++) positions[i] = position;
-    });
-    return positions;
   }
 
-  function revealSpokenPair() {
+  function applyParagraphBreaks() {
+    const breaks = paragraphBreaks?.[selected];
+    if (!breaks || renderedChapter !== sentences) return;
+    for (const sentence of sentences) {
+      const kind = breaks[sentence.id];
+      if (kind) passageText.children[sentence.index].dataset.break = kind;
+    }
+  }
+
+  function loadParagraphBreaks() {
+    if (paragraphBreaks || layoutRequest) return;
+    const base = new URL(window.GATSBY_SUBTITLE_ROOT || "./subtitles/", document.baseURI);
+    layoutRequest = fetch(new URL("paragraphs.json", base), {credentials:"omit", referrerPolicy:"no-referrer"})
+      .then(response => {
+        if (!response.ok) throw new Error("Paragraph layout unavailable");
+        return response.json();
+      })
+      .then(data => {
+        if (!Array.isArray(data)) return;
+        paragraphBreaks = data;
+        applyParagraphBreaks();
+        if (!selectedWord) revealSpokenPair();
+      })
+      .catch(() => {}) // Previously saved books can still display every sentence.
+      .finally(() => { layoutRequest = null; });
+  }
+
+  function revealSpokenPair(animate = false) {
     if (manuallyReading || !highlightedPair || !passageText.clientHeight) return;
-    const line = highlightedPair.getBoundingClientRect();
     const panel = passageText.getBoundingClientRect();
-    if (line.top < panel.top || line.height >= panel.height) passageText.scrollTop += line.top - panel.top;
-    else if (line.bottom > panel.bottom) passageText.scrollTop += line.bottom - panel.bottom;
+    const top = Math.max(panel.top, viewNav.getBoundingClientRect().bottom, 0);
+    const bottom = Math.min(panel.bottom, document.documentElement.clientHeight);
+    const height = bottom - top;
+    if (height < 64) return;
+    const row = highlightedPair.getBoundingClientRect();
+    const edge = Math.min(28, height * .07);
+    let focusTop = row.top, focusBottom = row.bottom;
+    nextReadingStep = Infinity;
+    if (row.height > height) {
+      // A very long sentence may span several screens. Advance in overlapping
+      // steps, first through the English and then the Chinese, without moving on every tick.
+      const parts = currentSentence.fragments;
+      const start = parts[0][0], end = parts[parts.length - 1][1];
+      const midpoint = (start + end) / 2;
+      const english = audio.currentTime < midpoint;
+      const from = english ? start : midpoint, until = english ? midpoint : end;
+      const text = (english ? highlightedPair.firstElementChild : highlightedPair.lastElementChild).getBoundingClientRect();
+      const space = height - edge * 2;
+      const overflow = Math.max(0, text.height - space);
+      const steps = 1 + Math.ceil(overflow / (space * .8));
+      const progress = Math.max(0, (audio.currentTime - from) / (until - from));
+      const step = Math.min(steps - 1, Math.floor(progress * steps));
+      focusTop = text.top + (steps > 1 ? overflow * step / (steps - 1) : 0);
+      focusBottom = focusTop + Math.min(text.height, space);
+      if (step + 1 < steps || english) nextReadingStep = from + (until - from) * (step + 1) / steps;
+    }
+    if (focusTop >= top && focusBottom <= bottom - edge) return;
+    const context = Math.min(height * .27, Math.max(0, height - (focusBottom - focusTop) - edge));
+    const delta = focusTop - top - context;
+    if (Math.abs(delta) < 2) return;
+    const gently = animate === true && !reducedMotion.matches && Math.abs(delta) < height * 1.3;
+    passageText.scrollTo({top:passageText.scrollTop + delta, behavior:gently ? "smooth" : "auto"});
   }
 
   // A reader can review the rest of this passage without fighting the audio.
@@ -248,74 +288,95 @@
   passageText.addEventListener("keydown", event => {
     if (["ArrowDown", "ArrowUp", "Home", "End", "PageDown", "PageUp", " "].includes(event.key)) manuallyReading = true;
   });
-  window.addEventListener("resize", revealSpokenPair);
+  // Size the reading pane to the visible page. This also leaves the last line
+  // reachable when transport controls occupy part of a short phone screen.
+  function fitPassage() {
+    if (!passageText.clientWidth) return;
+    const panelTop = passageText.getBoundingClientRect().top;
+    const room = document.documentElement.clientHeight - Math.max(0, panelTop) - 8;
+    passageText.style.setProperty("--reading-room", Math.max(144, Math.floor(room)) + "px");
+  }
+  window.addEventListener("scroll", fitPassage, {passive:true});
+  window.addEventListener("resize", () => { fitPassage(); revealSpokenPair(); });
+  if (window.ResizeObserver) new ResizeObserver(fitPassage).observe(subtitlePanel.querySelector(".subtitle-tools"));
 
-  function showPassage(position, started) {
-    if (visiblePassage !== position.group) {
+  function showPassage(sentence) {
+    if (renderedChapter !== sentences) {
       const content = document.createDocumentFragment();
-      for (const pair of position.group) {
+      for (const item of sentences) {
         const row = document.createElement("div");
         row.className = "subtitle-pair";
         const english = document.createElement("p"), chinese = document.createElement("p");
         english.lang = "en";
         chinese.lang = "zh-CN";
         row.append(english, chinese);
-        renderSubtitlePair(english, chinese, pair.fragments);
+        renderSubtitlePair(english, chinese, item.fragments);
         content.append(row);
       }
       passageText.replaceChildren(content);
-      passageText.scrollTop = 0;
-      manuallyReading = false;
-      visiblePassage = position.group;
+      renderedChapter = sentences;
       highlightedPair = null;
+      applyParagraphBreaks();
+      fitPassage();
     }
-    const current = started ? passageText.children[position.line] : null;
-    if (current !== highlightedPair) {
-      if (highlightedPair) highlightedPair.removeAttribute("aria-current");
-      if (current) current.setAttribute("aria-current", "true");
-      highlightedPair = current;
-      revealSpokenPair();
+    const current = sentence ? passageText.children[sentence.index] : null;
+    if (current === highlightedPair) {
+      if (audio.currentTime >= nextReadingStep && !manuallyReading) revealSpokenPair(!audio.paused);
+      return;
     }
+    const following = currentSentence && sentence?.index === currentSentence.index + 1;
+    if (sentence?.group !== currentSentence?.group) manuallyReading = false;
+    if (highlightedPair) highlightedPair.removeAttribute("aria-current");
+    if (current) current.setAttribute("aria-current", "true");
+    currentSentence = sentence;
+    highlightedPair = current;
+    nextReadingStep = Infinity;
+    if (current) revealSpokenPair(following && !audio.paused && !audio.seeking);
+    else passageText.scrollTop = 0;
   }
 
   function displayMode() {
     byId("subtitle-single").hidden = passageChoice.checked;
     passageText.hidden = !passageChoice.checked;
+    if (subtitlesEnabled && passageChoice.checked) loadParagraphBreaks();
     byId("player").classList.toggle("subtitles-on", subtitlesEnabled);
     byId("player").classList.toggle("passage-reading", subtitlesEnabled && passageChoice.checked);
+    if (subtitlesEnabled && passageChoice.checked) fitPassage();
   }
 
   function resetSubtitleText(status) {
     visibleSentence = null;
-    visiblePassage = null;
-    highlightedPair = null;
+    renderedChapter = null;
+    highlightedPair = currentSentence = null;
+    nextReadingStep = Infinity;
+    manuallyReading = false;
     passageText.replaceChildren();
+    passageText.scrollTop = 0;
     renderSubtitlePair(subtitleEnglish, subtitleChinese, []);
     subtitleStatus.textContent = status;
   }
   // A sentence stays current through the narrator's pause until the next one begins.
-  function positionAt(seconds) {
+  function sentenceAt(seconds) {
     let lo = 0, hi = activeCues.length;
     while (lo < hi) {
       const mid = Math.floor((lo + hi) / 2);
       if (activeCues[mid][0] <= seconds) lo = mid + 1;
       else hi = mid;
     }
-    return passagePositions[lo - 1] || null;
+    return sentenceByCue[lo - 1] || null;
   }
 
   function syncSubtitles() {
     if (!activeCues?.length) return;
-    const position = positionAt(audio.currentTime);
-    if (replaySentence) replaySentence.disabled = !position;
+    const sentence = sentenceAt(audio.currentTime);
+    if (replaySentence) replaySentence.disabled = !sentence;
     if (selectedWord || !subtitlesEnabled) return;
-    const status = !position && !passageChoice.checked ? "字幕将在朗读开始时出现。" : "";
+    const status = !sentence && !passageChoice.checked ? "字幕将在朗读开始时出现。" : "";
     if (subtitleStatus.textContent !== status) subtitleStatus.textContent = status;
     if (passageChoice.checked) {
-      showPassage(position || passagePositions[0], Boolean(position));
+      showPassage(sentence);
       return;
     }
-    const sentence = position?.sentence || null;
     if (sentence === visibleSentence) return;
     visibleSentence = sentence;
     renderSubtitlePair(subtitleEnglish, subtitleChinese, sentence ? sentence.fragments : []);
@@ -323,8 +384,8 @@
 
   replaySentence?.addEventListener("click", () => {
     if (!activeCues?.length) return;
-    const position = positionAt(audio.currentTime);
-    const beginning = selectedGloss?.sentenceStart ?? position?.sentence.fragments[0][0];
+    const sentence = sentenceAt(audio.currentTime);
+    const beginning = selectedGloss?.sentenceStart ?? sentence?.fragments[0][0];
     if (beginning == null) return;
     closeWordNote(false, false);
     manuallyReading = false;
@@ -366,7 +427,7 @@
       const cues = await load;
       if (chapter !== selected) return;
       activeCues = cues;
-      passagePositions = indexPassages(cues);
+      indexSentences(cues);
       if (!cues.length) resetSubtitleText("这一章暂无字幕。");
       else syncSubtitles();
     } catch (_) {
@@ -401,7 +462,7 @@
   const playerView = byId("player"), chapterView = byId("chapters");
   const openLibrary = byId("open-library"), backToPlayer = byId("back-to-player");
   let readingOffset = 0;
-  let readingPassage = null, readingPair = null, passageOffset = 0;
+  let readingChapter = null, readingPair = null, passageOffset = 0;
   let libraryEntry;
 
   function showLibrary(open, focus = true) {
@@ -409,7 +470,7 @@
     if (open) {
       closeWordNote();
       readingOffset = window.scrollY;
-      readingPassage = visiblePassage;
+      readingChapter = renderedChapter;
       readingPair = highlightedPair;
       passageOffset = passageText.scrollTop;
     }
@@ -419,7 +480,8 @@
     backToPlayer.hidden = !open;
     window.scrollTo(0, open ? 0 : readingOffset);
     if (!open) {
-      if (readingPassage === visiblePassage) passageText.scrollTop = passageOffset;
+      fitPassage();
+      if (readingChapter === renderedChapter) passageText.scrollTop = passageOffset;
       if (readingPair !== highlightedPair) revealSpokenPair();
     }
     if (focus) (open ? backToPlayer : openLibrary).focus({preventScroll:true});
@@ -514,7 +576,7 @@
       if (index !== selected || audio.ended) {
         select(index);
         readingOffset = 0;
-        readingPassage = null;
+        readingChapter = null;
       }
       returnToPlayer();
       play.focus({preventScroll:true});
