@@ -43,7 +43,7 @@
   const passageText = byId("subtitle-passage");
   const glossToggle = byId("gloss-toggle"), wordNote = byId("word-note");
   const glossKey = "gatsby.subtitle-glosses.v1";
-  let selectedWord = null, selectedTranslation = null;
+  let selectedWord = null, selectedGloss = null;
   const subtitleKey = "gatsby.bilingual-subtitles.v1";
   const modeKey = "gatsby.subtitle-mode.v1";
   const subtitleLoads = new Map();
@@ -60,10 +60,9 @@
   function closeWordNote(restoreFocus = false, followAudio = true) {
     if (!selectedWord) return;
     const trigger = selectedWord;
-    trigger.setAttribute("aria-expanded", "false");
-    selectedTranslation?.classList.remove("gloss-match");
+    for (const mark of selectedGloss.marks) mark.setAttribute("aria-expanded", "false");
     wordNote.hidden = true;
-    selectedWord = selectedTranslation = null;
+    selectedWord = selectedGloss = null;
     if (followAudio) syncSubtitles();
     if (restoreFocus) (trigger.isConnected ? trigger : glossToggle).focus({preventScroll:true});
   }
@@ -86,13 +85,13 @@
     wordNote.style.top = Math.max(gap, Math.min(y, height - box.height - gap)) + "px";
   }
 
-  function openWordNote(button, translation, entry, keyboard) {
+  function openWordNote(button, gloss, keyboard) {
     if (selectedWord === button) { closeWordNote(); return; }
     closeWordNote(false, false);
     selectedWord = button;
-    selectedTranslation = translation;
-    button.setAttribute("aria-expanded", "true");
-    translation?.classList.add("gloss-match");
+    selectedGloss = gloss;
+    const entry = gloss.entry;
+    for (const mark of gloss.marks) mark.setAttribute("aria-expanded", "true");
     byId("note-term").textContent = entry[0];
     byId("note-zh").textContent = entry[1];
     byId("note-en").textContent = entry[2];
@@ -118,48 +117,78 @@
   window.addEventListener("resize", positionWordNote);
   document.addEventListener("scroll", positionWordNote, {capture:true, passive:true});
 
-  // Render each timed fragment separately. A repeated word in another line can have a different sense.
+  function wordSpan(className, text) {
+    const span = document.createElement("span");
+    span.className = className;
+    span.textContent = text;
+    return span;
+  }
+
+  function numberedGloss(tag, gloss) {
+    const element = document.createElement(tag);
+    element.dataset.glossNumber = gloss.number;
+    element.append(wordSpan("gloss-number", String(gloss.number)));
+    return element;
+  }
+
+  function appendMarkedLine(target, original, glosses, termField) {
+    const matches = [];
+    for (const gloss of glosses) {
+      const term = gloss.entry[termField];
+      if (!term) continue;
+      const start = original.indexOf(term);
+      if (start >= 0) matches.push({gloss, start, term});
+    }
+    // Translations can put the words in a different order. Keep their English numbers.
+    matches.sort((a, b) => a.start - b.start);
+    let cursor = 0;
+    for (const {gloss, start, term} of matches) {
+      if (start < cursor) continue;
+      target.append(original.slice(cursor, start));
+      const mark = numberedGloss("button", gloss);
+      mark.type = "button";
+      mark.className = "gloss-word";
+      mark.setAttribute("aria-expanded", "false");
+      mark.setAttribute("aria-haspopup", "dialog");
+      mark.setAttribute("aria-controls", "word-note");
+      mark.append(wordSpan("gloss-text", term));
+      mark.addEventListener("click", event => openWordNote(mark, gloss, event.detail === 0));
+      gloss.marks.push(mark);
+      target.append(mark);
+      cursor = start + term.length;
+    }
+    target.append(original.slice(cursor));
+  }
+
   function renderSubtitlePair(english, chinese, fragments) {
     const en = document.createDocumentFragment(), zh = document.createDocumentFragment();
+    const rowGlosses = [];
     for (const [index, cue] of fragments.entries()) {
       if (index) en.append(" ");
+      // Match within the original timed cue, even when joining fragments in passage mode.
       const entries = glossToggle?.checked && Array.isArray(cue[6]) ? cue[6] : [];
-      const translations = new Map();
-      function appendLine(target, original, chineseLine) {
-        const matches = [];
-        for (const entry of entries) {
-          if (!Array.isArray(entry) || !entry[0] || !entry[1] || !entry[2]) continue;
-          const term = chineseLine ? entry[3] : entry[0];
-          if (!term) continue;
-          const start = original.indexOf(term);
-          if (start >= 0) matches.push({start, term, entry});
-        }
-        matches.sort((a, b) => a.start - b.start);
-        let cursor = 0;
-        for (const {start, term, entry} of matches) {
-          if (start < cursor) continue;
-          target.append(original.slice(cursor, start));
-          const mark = document.createElement(chineseLine ? "span" : "button");
-          mark.textContent = term;
-          if (chineseLine) translations.set(entry, mark);
-          else {
-            mark.type = "button";
-            mark.className = "gloss-word";
-            mark.setAttribute("aria-expanded", "false");
-            mark.setAttribute("aria-haspopup", "dialog");
-            mark.setAttribute("aria-controls", "word-note");
-            mark.addEventListener("click", event => openWordNote(mark, translations.get(entry), entry, event.detail === 0));
-          }
-          target.append(mark);
-          cursor = start + term.length;
-        }
-        target.append(original.slice(cursor));
-      }
-      appendLine(zh, cue[3], true);
-      appendLine(en, cue[2], false);
+      const glosses = entries.filter(entry => Array.isArray(entry) && entry[0] && entry[1] && entry[2] && cue[2].includes(entry[0]))
+        .sort((a, b) => cue[2].indexOf(a[0]) - cue[2].indexOf(b[0]))
+        .map((entry, i) => ({entry, number:rowGlosses.length + i + 1, marks:[]}));
+      appendMarkedLine(en, cue[2], glosses, 0);
+      appendMarkedLine(zh, cue[3], glosses, 3);
+      rowGlosses.push(...glosses);
     }
     english.replaceChildren(en);
     chinese.replaceChildren(zh);
+    if (chinese.nextElementSibling?.classList.contains("gloss-meanings")) chinese.nextElementSibling.remove();
+    if (!rowGlosses.length) return;
+    const list = document.createElement("ul");
+    list.className = "gloss-meanings";
+    list.setAttribute("aria-label", "本句难词释义");
+    for (const gloss of rowGlosses) {
+      const item = numberedGloss("li", gloss);
+      const term = wordSpan("gloss-term", gloss.entry[0]);
+      term.lang = "en";
+      item.append(term, " ", wordSpan("gloss-definition", gloss.entry[1]));
+      list.append(item);
+    }
+    chinese.after(list);
   }
 
   glossToggle?.addEventListener("change", () => {
@@ -238,8 +267,8 @@
         const english = document.createElement("p"), chinese = document.createElement("p");
         english.lang = "en";
         chinese.lang = "zh-CN";
-        renderSubtitlePair(english, chinese, pair.fragments);
         row.append(english, chinese);
+        renderSubtitlePair(english, chinese, pair.fragments);
         content.append(row);
       }
       passageText.replaceChildren(content);
@@ -269,8 +298,7 @@
     visiblePassage = null;
     highlightedPair = null;
     passageText.replaceChildren();
-    subtitleEnglish.textContent = "";
-    subtitleChinese.textContent = "";
+    renderSubtitlePair(subtitleEnglish, subtitleChinese, []);
     subtitleStatus.textContent = status;
   }
   function syncSubtitles() {
