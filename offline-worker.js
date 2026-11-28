@@ -1,5 +1,5 @@
 // Bump this revision when the player or its captions change. Audio is keyed by digest.
-const revision = "2026-11-28-4";
+const revision = "2026-11-28-5";
 const scope = self.registration.scope;
 const prefix = "gatsby-listen:" + scope + ":";
 const audioCacheName = prefix + "audio";

@@ -45,9 +45,12 @@
             <p class="kicker" id="player-state">所选章节</p>
             <h2 id="current">第一章 <em lang="en">Chapter One</em></h2>
           </div>
-          <button class="subtitle-toggle" id="subtitle-toggle" type="button" role="switch" aria-checked="false" aria-controls="subtitle-panel">
-            <span>中英字幕</span><span class="switch-track" aria-hidden="true"></span>
-          </button>
+          <div class="listening-actions">
+            <button class="replay-sentence" id="replay-sentence" type="button" disabled>重听这句</button>
+            <button class="subtitle-toggle" id="subtitle-toggle" type="button" role="switch" aria-checked="false" aria-controls="subtitle-panel">
+              <span>中英字幕</span><span class="switch-track" aria-hidden="true"></span>
+            </button>
+          </div>
         </div>
         <div id="audio-slot"><audio id="audio" controls controlslist="nodownload" preload="none" aria-label="章节播放与进度"></audio></div>
         <p id="notice" role="status" hidden></p>

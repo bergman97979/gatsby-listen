@@ -36,6 +36,7 @@
   let lastSaved = 0;
 
   const subtitleToggle = byId("subtitle-toggle");
+  const replaySentence = byId("replay-sentence");
   const subtitlePanel = byId("subtitle-panel");
   const subtitleStatus = byId("subtitle-status");
   const subtitleEnglish = byId("subtitle-en"), subtitleChinese = byId("subtitle-zh");
@@ -47,7 +48,7 @@
   const subtitleKey = "gatsby.bilingual-subtitles.v1";
   const modeKey = "gatsby.subtitle-mode.v1";
   const subtitleLoads = new Map();
-  let subtitlesEnabled = false, activeCues = null, visibleCue = null;
+  let subtitlesEnabled = false, activeCues = null, visibleSentence = null;
   let passagePositions = [], visiblePassage = null, highlightedPair = null;
   let manuallyReading = false;
   try {
@@ -165,14 +166,17 @@
     let toneIndex = 0;
     for (const [index, cue] of fragments.entries()) {
       if (index) en.append(" ");
-      // Match within the original timed cue, even when joining fragments in passage mode.
+      // Each annotation is anchored in its original fragment, even within a long sentence.
       const entries = glossToggle?.checked && Array.isArray(cue[6]) ? cue[6] : [];
       const glosses = entries.filter(entry => Array.isArray(entry) && entry[0] && entry[1] && entry[2])
         .map(entry => ({entry, enStart:termStart(cue[2], entry[0], entry[4]?.en),
           zhStart:termStart(cue[3], entry[3], entry[4]?.zh), marks:[]}))
         .filter(gloss => gloss.enStart >= 0)
         .sort((a, b) => a.enStart - b.enStart);
-      for (const gloss of glosses) gloss.tone = glossTones[toneIndex++ % glossTones.length];
+      for (const gloss of glosses) {
+        gloss.tone = glossTones[toneIndex++ % glossTones.length];
+        gloss.sentenceStart = fragments[0][0];
+      }
       appendMarkedLine(en, cue[2], glosses, 0);
       appendMarkedLine(zh, cue[3], glosses, 3);
     }
@@ -184,7 +188,7 @@
     closeWordNote();
     byId("gloss-hint").hidden = !glossToggle.checked;
     try { localStorage.setItem(glossKey, glossToggle.checked ? "on" : "off"); } catch (_) {}
-    visibleCue = undefined;
+    visibleSentence = null;
     visiblePassage = null;
     syncSubtitles();
   });
@@ -218,7 +222,7 @@
         group = [];
         lastGroup = groupId;
       }
-      const position = {group, line:group.length};
+      const position = {group, line:group.length, sentence:pair};
       group.push(pair);
       const end = index + 1 < pairs.length ? pairs[index + 1].first : cues.length;
       for (let i = pair.first; i < end; i++) positions[i] = position;
@@ -246,8 +250,7 @@
   });
   window.addEventListener("resize", revealSpokenPair);
 
-  function showPassage(index, speaking) {
-    const position = passagePositions[index];
+  function showPassage(position, started) {
     if (visiblePassage !== position.group) {
       const content = document.createDocumentFragment();
       for (const pair of position.group) {
@@ -266,7 +269,7 @@
       visiblePassage = position.group;
       highlightedPair = null;
     }
-    const current = speaking ? passageText.children[position.line] : null;
+    const current = started ? passageText.children[position.line] : null;
     if (current !== highlightedPair) {
       if (highlightedPair) highlightedPair.removeAttribute("aria-current");
       if (current) current.setAttribute("aria-current", "true");
@@ -283,34 +286,52 @@
   }
 
   function resetSubtitleText(status) {
-    visibleCue = null;
+    visibleSentence = null;
     visiblePassage = null;
     highlightedPair = null;
     passageText.replaceChildren();
     renderSubtitlePair(subtitleEnglish, subtitleChinese, []);
     subtitleStatus.textContent = status;
   }
-  function syncSubtitles() {
-    if (selectedWord || !subtitlesEnabled || !activeCues || !activeCues.length) return;
-    const seconds = audio.currentTime;
+  // A sentence stays current through the narrator's pause until the next one begins.
+  function positionAt(seconds) {
     let lo = 0, hi = activeCues.length;
     while (lo < hi) {
       const mid = Math.floor((lo + hi) / 2);
       if (activeCues[mid][0] <= seconds) lo = mid + 1;
       else hi = mid;
     }
-    const previous = activeCues[lo - 1];
-    const cue = previous && seconds < previous[1] ? previous : null;
-    const status = lo === 0 && !passageChoice.checked ? "字幕将在朗读开始时出现。" : "";
+    return passagePositions[lo - 1] || null;
+  }
+
+  function syncSubtitles() {
+    if (!activeCues?.length) return;
+    const position = positionAt(audio.currentTime);
+    if (replaySentence) replaySentence.disabled = !position;
+    if (selectedWord || !subtitlesEnabled) return;
+    const status = !position && !passageChoice.checked ? "字幕将在朗读开始时出现。" : "";
     if (subtitleStatus.textContent !== status) subtitleStatus.textContent = status;
     if (passageChoice.checked) {
-      showPassage(Math.max(0, lo - 1), Boolean(cue));
+      showPassage(position || passagePositions[0], Boolean(position));
       return;
     }
-    if (cue === visibleCue) return;
-    visibleCue = cue;
-    renderSubtitlePair(subtitleEnglish, subtitleChinese, cue ? [cue] : []);
+    const sentence = position?.sentence || null;
+    if (sentence === visibleSentence) return;
+    visibleSentence = sentence;
+    renderSubtitlePair(subtitleEnglish, subtitleChinese, sentence ? sentence.fragments : []);
   }
+
+  replaySentence?.addEventListener("click", () => {
+    if (!activeCues?.length) return;
+    const position = positionAt(audio.currentTime);
+    const beginning = selectedGloss?.sentenceStart ?? position?.sentence.fragments[0][0];
+    if (beginning == null) return;
+    closeWordNote(false, false);
+    manuallyReading = false;
+    audio.currentTime = beginning;
+    syncSubtitles();
+    start();
+  });
   async function readCues(chapter) {
     let cues = window.GATSBY_SUBTITLES?.[chapter];
     if (cues === undefined) {
@@ -330,10 +351,10 @@
   async function loadSubtitles() {
     closeWordNote();
     activeCues = null;
+    if (replaySentence) replaySentence.disabled = true;
     displayMode();
     subtitleToggle.setAttribute("aria-checked", String(subtitlesEnabled));
     subtitlePanel.hidden = !subtitlesEnabled;
-    if (!subtitlesEnabled) return;
     const chapter = selected;
     resetSubtitleText("正在加载本章字幕…");
     let load = subtitleLoads.get(chapter);
@@ -343,7 +364,7 @@
     }
     try {
       const cues = await load;
-      if (chapter !== selected || !subtitlesEnabled) return;
+      if (chapter !== selected) return;
       activeCues = cues;
       passagePositions = indexPassages(cues);
       if (!cues.length) resetSubtitleText("这一章暂无字幕。");
