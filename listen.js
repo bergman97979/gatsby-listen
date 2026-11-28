@@ -177,10 +177,7 @@
           zhStart:termStart(cue[3], entry[3], entry[4]?.zh), marks:[]}))
         .filter(gloss => gloss.enStart >= 0)
         .sort((a, b) => a.enStart - b.enStart);
-      for (const gloss of glosses) {
-        gloss.tone = glossTones[toneIndex++ % glossTones.length];
-        gloss.sentenceStart = fragments[0][0];
-      }
+      for (const gloss of glosses) gloss.tone = glossTones[toneIndex++ % glossTones.length];
       appendMarkedLine(en, cue[2], glosses, 0);
       appendMarkedLine(zh, cue[3], glosses, 3);
     }
@@ -366,10 +363,20 @@
     return sentenceByCue[lo - 1] || null;
   }
 
+  // During a pause the displayed sentence has finished and is itself the replay target.
+  function lastFinishedSentence(seconds, current) {
+    if (!current) return null;
+    const parts = current.fragments;
+    const finished = seconds >= parts[parts.length - 1][1] ? current : sentences[current.index - 1];
+    if (!finished || (finished.index === 0 && /^Chapter \w+$/i.test(finished.fragments[0][2]))) return null;
+    return finished;
+  }
+
   function syncSubtitles() {
     if (!activeCues?.length) return;
-    const sentence = sentenceAt(audio.currentTime);
-    if (replaySentence) replaySentence.disabled = !sentence;
+    const time = audio.currentTime;
+    const sentence = sentenceAt(time);
+    if (replaySentence) replaySentence.disabled = !lastFinishedSentence(time, sentence);
     if (selectedWord || !subtitlesEnabled) return;
     const status = !sentence && !passageChoice.checked ? "字幕将在朗读开始时出现。" : "";
     if (subtitleStatus.textContent !== status) subtitleStatus.textContent = status;
@@ -384,12 +391,12 @@
 
   replaySentence?.addEventListener("click", () => {
     if (!activeCues?.length) return;
-    const sentence = sentenceAt(audio.currentTime);
-    const beginning = selectedGloss?.sentenceStart ?? sentence?.fragments[0][0];
-    if (beginning == null) return;
+    const time = audio.currentTime;
+    const previous = lastFinishedSentence(time, sentenceAt(time));
+    if (!previous) return;
     closeWordNote(false, false);
     manuallyReading = false;
-    audio.currentTime = beginning;
+    audio.currentTime = previous.fragments[0][0];
     syncSubtitles();
     start();
   });
